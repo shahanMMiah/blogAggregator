@@ -12,6 +12,29 @@ import (
 	"github.com/google/uuid"
 )
 
+const createFeed = `-- name: CreateFeed :one
+INSERT INTO feeds(name, url, user_id)
+VALUES(
+    $1,
+    $2,
+    $3
+)
+RETURNING name, url, user_id
+`
+
+type CreateFeedParams struct {
+	Name   string
+	Url    string
+	UserID uuid.UUID
+}
+
+func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, error) {
+	row := q.db.QueryRowContext(ctx, createFeed, arg.Name, arg.Url, arg.UserID)
+	var i Feed
+	err := row.Scan(&i.Name, &i.Url, &i.UserID)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, created_at, updated_at, name)
 VALUES (
@@ -64,11 +87,47 @@ func (q *Queries) GetUser(ctx context.Context, name string) (User, error) {
 	return i, err
 }
 
-const reset = `-- name: Reset :exec
+const getUsers = `-- name: GetUsers :many
+Select name FROM users
+`
+
+func (q *Queries) GetUsers(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const resetFeeds = `-- name: ResetFeeds :exec
+DELETE FROM feeds
+`
+
+func (q *Queries) ResetFeeds(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetFeeds)
+	return err
+}
+
+const resetUsers = `-- name: ResetUsers :exec
 DELETE FROM users
 `
 
-func (q *Queries) Reset(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, reset)
+func (q *Queries) ResetUsers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetUsers)
 	return err
 }

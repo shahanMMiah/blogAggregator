@@ -12,5 +12,20 @@ RETURNING *;
 Select * FROM users
 WHERE name = $1 LIMIT 1;
 
--- name: Reset :exec
-DELETE FROM users;
+-- name: ResetUsers :exec
+DELETE FROM users; 
+
+-- name: ResetFeeds :exec
+DELETE FROM feeds;
+
+-- name: GetUsers :many
+Select name FROM users;
+
+-- name: CreateFeed :one
+INSERT INTO feeds(name, url, user_id)
+VALUES(
+    $1,
+    $2,
+    $3
+)
+RETURNING *;
