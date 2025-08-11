@@ -35,6 +35,8 @@ func main() {
 	cmds.Register("users", HandlerGetUsers)
 	cmds.Register("agg", HandlerAggegate)
 	cmds.Register("addfeed", HandlerAddFeed)
+	cmds.Register("feeds", HandlerFeeds)
+	cmds.Register("follow", HandlerFollow)
 
 	cmd, err := CreateCommand()
 	if err != nil {
