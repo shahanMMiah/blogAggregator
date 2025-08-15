@@ -34,21 +34,16 @@ func main() {
 	cmds.Register("reset", HandlerReset)
 	cmds.Register("users", HandlerGetUsers)
 	cmds.Register("agg", HandlerAggegate)
-	cmds.Register("addfeed", HandlerAddFeed)
+	cmds.Register("addfeed", MiddlewareLoggedIn(HandlerAddFeed))
 	cmds.Register("feeds", HandlerFeeds)
-	cmds.Register("follow", HandlerFollow)
+	cmds.Register("follow", MiddlewareLoggedIn(HandlerFollow))
+	cmds.Register("unfollow", MiddlewareLoggedIn(HandlerUnfollow))
+	cmds.Register("following", MiddlewareLoggedIn(HandlerFollowing))
 
 	cmd, err := CreateCommand()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
-	}
-
-	if cmd.Name == "agg" {
-		if len(cmd.Args) == 0 {
-			cmd.Args = append(cmd.Args, "https://www.wagslane.dev/index.xml")
-		}
-		cmd.Args[0] = "https://www.wagslane.dev/index.xml"
 	}
 
 	err = cmds.Run(&state, cmd)

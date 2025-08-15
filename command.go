@@ -63,14 +63,36 @@ func (cmds *Commands) Run(s *State, cmd Command) error {
 	return nil
 }
 
+func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) error) func(*State, Command) error {
+
+	return func(s *State, cmd Command) error {
+
+		currentUser, err := s.DbQueries.GetUser(context.Background(), s.Config.Current_user_name)
+
+		if err != nil {
+			return err
+		}
+
+		return handler(s, cmd, currentUser)
+
+	}
+
+}
+
 // cli handler functions
 func HandlerReset(s *State, cmd Command) error {
-	err := s.DbQueries.ResetUsers(context.Background())
+	ctx := context.Background()
+	err := s.DbQueries.ResetUsers(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = s.DbQueries.ResetFeeds(context.Background())
+	err = s.DbQueries.ResetFeeds(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = s.DbQueries.ResetFeedFollow(ctx)
 	if err != nil {
 		return err
 	}
@@ -175,17 +197,12 @@ func HandlerAggegate(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerAddFeed(s *State, cmd Command) error {
+func HandlerAddFeed(s *State, cmd Command, currentUser database.User) error {
 	if len(cmd.Args) < 2 {
 		return fmt.Errorf("addfeed command expects a name and URL")
 
 	}
 	ctx := context.Background()
-	currentUser, err := s.DbQueries.GetUser(ctx, s.Config.Current_user_name)
-
-	if err != nil {
-		return err
-	}
 
 	feedEntry, err := s.DbQueries.CreateFeed(ctx,
 		database.CreateFeedParams{
@@ -199,6 +216,14 @@ func HandlerAddFeed(s *State, cmd Command) error {
 	}
 
 	fmt.Printf("feed entry added: %v\n", feedEntry)
+
+	followArgs := Command{Name: "follow", Args: cmd.Args[1:]}
+	err = HandlerFollow(s, followArgs, currentUser)
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 
 }
@@ -227,15 +252,10 @@ func HandlerFeeds(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerFollow(s *State, cmd Command) error {
+func HandlerFollow(s *State, cmd Command, currentUser database.User) error {
 	ctx := context.Background()
 	if len(cmd.Args) < 1 {
 		return fmt.Errorf("follow command expects a url arg")
-	}
-
-	currentUser, err := s.DbQueries.GetUser(ctx, s.Config.Current_user_name)
-	if err != nil {
-		return err
 	}
 
 	followRes, err := s.DbQueries.CreateFeedFollow(
@@ -251,6 +271,50 @@ func HandlerFollow(s *State, cmd Command) error {
 		return err
 	}
 
-	fmt.Printf("user %v has followed feed: %v", followRes.UserName, followRes.FeedName)
+	fmt.Printf("user %v has followed feed: %v\n", followRes.UserName, followRes.FeedName)
 	return nil
+}
+
+func HandlerUnfollow(s *State, cmd Command, user database.User) error {
+
+	ctx := context.Background()
+	if len(cmd.Args) < 1 {
+		return fmt.Errorf("unfollow command expects a url arg")
+	}
+
+	err := s.DbQueries.RemoveFeedFollow(
+		ctx,
+		database.RemoveFeedFollowParams{
+			UserID: user.ID,
+			FeedID: cmd.Args[0],
+		})
+	if err != nil {
+		return err
+	}
+
+	feed, err := s.DbQueries.GetFeed(ctx, cmd.Args[0])
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%v has unfollowed %v", user.Name, feed.Name)
+	return nil
+
+}
+func HandlerFollowing(s *State, cmd Command, user database.User) error {
+
+	ctx := context.Background()
+
+	res, err := s.DbQueries.GetFeedsForUser(ctx, user.ID)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%v is following:\n", user.Name)
+	for _, feed := range res {
+		fmt.Printf("	%v\n", feed.FeedName)
+	}
+
+	return nil
+
 }

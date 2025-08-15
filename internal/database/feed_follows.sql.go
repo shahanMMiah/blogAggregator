@@ -13,7 +13,6 @@ import (
 )
 
 const createFeedFollow = `-- name: CreateFeedFollow :one
-
 WITH feed_folow_insert AS (
     INSERT INTO feed_follows(id, created_at, updated_at, user_id, feed_id)
     VALUES(
@@ -70,4 +69,78 @@ func (q *Queries) CreateFeedFollow(ctx context.Context, arg CreateFeedFollowPara
 		&i.UserName,
 	)
 	return i, err
+}
+
+const getFeedsForUser = `-- name: GetFeedsForUser :many
+SELECT feed_follows.id, feed_follows.created_at, feed_follows.updated_at, feed_follows.user_id, feed_follows.feed_id, 
+    feeds.name AS feed_name,
+    users.name AS user_name
+    FROM feed_follows
+    INNER JOIN feeds ON feed_follows.feed_id = feeds.url
+    INNER JOIN users ON feed_follows.user_id = users.id 
+    WHERE feed_follows.user_id = $1
+`
+
+type GetFeedsForUserRow struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	UserID    uuid.UUID
+	FeedID    string
+	FeedName  string
+	UserName  string
+}
+
+func (q *Queries) GetFeedsForUser(ctx context.Context, userID uuid.UUID) ([]GetFeedsForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, getFeedsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetFeedsForUserRow
+	for rows.Next() {
+		var i GetFeedsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UserID,
+			&i.FeedID,
+			&i.FeedName,
+			&i.UserName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removeFeedFollow = `-- name: RemoveFeedFollow :exec
+DELETE FROM feed_follows WHERE user_id = $1 AND feed_id = $2
+`
+
+type RemoveFeedFollowParams struct {
+	UserID uuid.UUID
+	FeedID string
+}
+
+func (q *Queries) RemoveFeedFollow(ctx context.Context, arg RemoveFeedFollowParams) error {
+	_, err := q.db.ExecContext(ctx, removeFeedFollow, arg.UserID, arg.FeedID)
+	return err
+}
+
+const resetFeedFollow = `-- name: ResetFeedFollow :exec
+Delete FROM feed_follows
+`
+
+func (q *Queries) ResetFeedFollow(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetFeedFollow)
+	return err
 }
