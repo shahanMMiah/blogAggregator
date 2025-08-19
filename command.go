@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -79,6 +82,53 @@ func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) 
 
 }
 
+func ScrapeFeed(s *State, user database.User) error {
+	ctx := context.Background()
+	feed, err := s.DbQueries.GetNextFetchedFeed(ctx, user.ID)
+
+	if err != nil {
+		return err
+	}
+	err = s.DbQueries.MarkFeedFetched(ctx, database.MarkFeedFetchedParams{LastFetchedAt: sql.NullTime{Time: time.Now(), Valid: true}, Url: feed.Url})
+	if err != nil {
+		return err
+	}
+
+	feedResp, err := rss.FetchFeed(ctx, feed.Url)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("####feed tes for %v: (%v titles)######\n", feed.Name, len(feedResp.Channel.Item))
+
+	for _, item := range feedResp.Channel.Item {
+
+		pbDate, err := time.Parse(time.RFC1123Z, item.PubDate)
+		if err != nil {
+			return err
+		}
+
+		_, err = s.DbQueries.CreatePost(ctx, database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   feed.CreatedAt,
+			UpdatedAt:   feed.UpdatedAt,
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: item.Description,
+			PublishedAt: pbDate,
+			FeedID:      feed.FeedID})
+
+		if !strings.Contains(fmt.Sprintf("%s", err), "duplicate key value violates unique constraint") {
+			return err
+
+		}
+
+	}
+
+	return nil
+
+}
+
 // cli handler functions
 func HandlerReset(s *State, cmd Command) error {
 	ctx := context.Background()
@@ -95,6 +145,11 @@ func HandlerReset(s *State, cmd Command) error {
 	err = s.DbQueries.ResetFeedFollow(ctx)
 	if err != nil {
 		return err
+	}
+
+	err = s.DbQueries.ResetPosts(ctx)
+	if err != nil {
+		return nil
 	}
 
 	fmt.Println("Databases has been reset")
@@ -181,18 +236,50 @@ func HandlerGetUsers(s *State, cmd Command) error {
 
 }
 
-func HandlerAggegate(s *State, cmd Command) error {
-	if len(cmd.Args) == 0 {
-		return fmt.Errorf("agg command expects a rss URL")
+func HandlerBrowse(s *State, cmd Command, user database.User) error {
+	limit := 2
+
+	if len(cmd.Args) > 0 {
+		limit, _ = strconv.Atoi(cmd.Args[0])
 
 	}
-
-	feed, err := rss.FetchFeed(context.Background(), cmd.Args[0])
+	userPostResp, err := s.DbQueries.GetUserPosts(context.Background(), database.GetUserPostsParams{UserID: user.ID, Limit: int32(limit)})
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(feed)
+	for _, post := range userPostResp {
+		fmt.Printf("post:  %v\n", post.Title)
+		fmt.Printf("\t%v\n", post.Description)
+	}
+
+	return nil
+}
+
+func HandlerAggregate(s *State, cmd Command, user database.User) error {
+
+	if len(cmd.Args) < 1 {
+		return fmt.Errorf("aggregate commend expect time args eg: <1m>")
+	}
+
+	t := cmd.Args[0]
+	reqDuration, err := time.ParseDuration(t)
+	if err != nil {
+		return err
+	}
+	ticker := time.NewTicker(reqDuration)
+
+	fmt.Printf("Collecting feeds every %v\n", t)
+
+	for ; ; <-ticker.C {
+
+		err = ScrapeFeed(s, user)
+
+		if err != nil {
+			return err
+		}
+
+	}
 
 	return nil
 }
@@ -257,6 +344,8 @@ func HandlerFollow(s *State, cmd Command, currentUser database.User) error {
 	if len(cmd.Args) < 1 {
 		return fmt.Errorf("follow command expects a url arg")
 	}
+
+	//feed, err := s.DbQueries.GetFeedFromName(ctx, )
 
 	followRes, err := s.DbQueries.CreateFeedFollow(
 		ctx,

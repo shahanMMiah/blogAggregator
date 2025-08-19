@@ -11,19 +11,7 @@ const CONSTFILENAME = ".gatorconfig.json"
 type Config struct {
 	Db_url            string
 	Current_user_name string
-}
-
-type State struct {
-	Config_ptr *Config
-}
-
-type Command struct {
-	Name string
-	Args []string
-}
-
-type Commands struct {
-	Cmds map[string]func(*State, Command) error
+	Posts_limit       int32
 }
 
 func Read() (Config, error) {
@@ -44,9 +32,7 @@ func Read() (Config, error) {
 
 }
 
-func (cfg *Config) SetUser(username string) error {
-
-	cfg.Current_user_name = username
+func (cfg *Config) SaveConfig() error {
 	jsonData, err := json.Marshal(cfg)
 	if err != nil {
 		return (err)
@@ -58,29 +44,10 @@ func (cfg *Config) SetUser(username string) error {
 	return nil
 }
 
-func HandlerLogin(s *State, cmd Command) error {
+func (cfg *Config) SetUser(username string) error {
 
-	if len(cmd.Args) == 0 {
-		return fmt.Errorf("login command expects a username argument")
-	}
-
-	err := s.Config_ptr.SetUser(cmd.Args[0])
-
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("User has been set to: %v\n", cmd.Args[0])
-	return nil
-}
-
-func (cmds *Commands) Run(s *State, cmd Command) error {
-
-	funcName, exists := cmds.Cmds[cmd.Name]
-	if !exists {
-		return fmt.Errorf("command does not exists")
-	}
-	err := funcName(s, cmd)
+	cfg.Current_user_name = username
+	err := cfg.SaveConfig()
 	if err != nil {
 		return err
 	}
@@ -88,13 +55,13 @@ func (cmds *Commands) Run(s *State, cmd Command) error {
 	return nil
 }
 
-func (cmds *Commands) Register(name string, f func(*State, Command) error) error {
-
-	_, exists := cmds.Cmds[name]
-	if exists {
-		return fmt.Errorf("cannot Register %v, already exists", name)
+func (cfg *Config) SetPostLimit(amount int32) error {
+	cfg.Posts_limit = amount
+	err := cfg.SaveConfig()
+	if err != nil {
+		return err
 	}
 
-	cmds.Cmds[name] = f
 	return nil
+
 }

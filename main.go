@@ -33,12 +33,13 @@ func main() {
 	cmds.Register("register", HandlerRegister)
 	cmds.Register("reset", HandlerReset)
 	cmds.Register("users", HandlerGetUsers)
-	cmds.Register("agg", HandlerAggegate)
+	cmds.Register("agg", MiddlewareLoggedIn(HandlerAggregate))
 	cmds.Register("addfeed", MiddlewareLoggedIn(HandlerAddFeed))
 	cmds.Register("feeds", HandlerFeeds)
 	cmds.Register("follow", MiddlewareLoggedIn(HandlerFollow))
 	cmds.Register("unfollow", MiddlewareLoggedIn(HandlerUnfollow))
 	cmds.Register("following", MiddlewareLoggedIn(HandlerFollowing))
+	cmds.Register("browse", MiddlewareLoggedIn(HandlerBrowse))
 
 	cmd, err := CreateCommand()
 	if err != nil {
