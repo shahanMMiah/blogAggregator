@@ -17,11 +17,12 @@ VALUES(
     $6,
     $7,
     $8
-) 
+)
 RETURNING *;
 
+
 -- name: GetUserPosts :many
-SELECT * FROM posts 
+SELECT posts.* FROM posts 
 INNER join feed_follows ON feed_follows.feed_id = posts.feed_id
 AND feed_follows.user_id = $1
 ORDER BY published_at DESC

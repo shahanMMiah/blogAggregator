@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/savioxavier/termlink"
 	"github.com/shahanmmiah/blogAggregator/internal/config"
 	"github.com/shahanmmiah/blogAggregator/internal/database"
 	"github.com/shahanmmiah/blogAggregator/rss"
@@ -26,10 +27,11 @@ type Command struct {
 }
 
 type Commands struct {
-	Cmds map[string]func(*State, Command) error
+	Cmds  map[string]func(*State, Command) error
+	Helps map[string]string
 }
 
-func (cmds *Commands) Register(name string, f func(*State, Command) error) error {
+func (cmds *Commands) Register(name, help string, f func(*State, Command) error) error {
 
 	_, exists := cmds.Cmds[name]
 	if exists {
@@ -37,6 +39,8 @@ func (cmds *Commands) Register(name string, f func(*State, Command) error) error
 	}
 
 	cmds.Cmds[name] = f
+	cmds.Helps[name] = help
+
 	return nil
 }
 
@@ -99,8 +103,6 @@ func ScrapeFeed(s *State, user database.User) error {
 		return err
 	}
 
-	fmt.Printf("####feed tes for %v: (%v titles)######\n", feed.Name, len(feedResp.Channel.Item))
-
 	for _, item := range feedResp.Channel.Item {
 
 		pbDate, err := time.Parse(time.RFC1123Z, item.PubDate)
@@ -108,7 +110,7 @@ func ScrapeFeed(s *State, user database.User) error {
 			return err
 		}
 
-		_, err = s.DbQueries.CreatePost(ctx, database.CreatePostParams{
+		postResp, err := s.DbQueries.CreatePost(ctx, database.CreatePostParams{
 			ID:          uuid.New(),
 			CreatedAt:   feed.CreatedAt,
 			UpdatedAt:   feed.UpdatedAt,
@@ -118,9 +120,11 @@ func ScrapeFeed(s *State, user database.User) error {
 			PublishedAt: pbDate,
 			FeedID:      feed.FeedID})
 
-		if !strings.Contains(fmt.Sprintf("%s", err), "duplicate key value violates unique constraint") {
-			return err
+		if err == nil {
+			fmt.Printf("collecting post %v from %v\n", postResp.Title, feedResp.Channel.Title)
+		} else if !strings.Contains(fmt.Sprintf("%s", err), "duplicate key value violates unique constraint") {
 
+			return err
 		}
 
 	}
@@ -248,9 +252,16 @@ func HandlerBrowse(s *State, cmd Command, user database.User) error {
 		return err
 	}
 
-	for _, post := range userPostResp {
-		fmt.Printf("post:  %v\n", post.Title)
-		fmt.Printf("\t%v\n", post.Description)
+	for num, post := range userPostResp {
+		rss, err := s.DbQueries.GetFeed(context.Background(), post.FeedID)
+
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("post #%v: from %s: %v\n", num, rss.Name, post.CreatedAt)
+		fmt.Printf("\tTitle : %v\n", termlink.Link(post.Title, post.Url))
+		fmt.Printf("\t\t%v\n", post.Description)
 	}
 
 	return nil
@@ -345,8 +356,6 @@ func HandlerFollow(s *State, cmd Command, currentUser database.User) error {
 		return fmt.Errorf("follow command expects a url arg")
 	}
 
-	//feed, err := s.DbQueries.GetFeedFromName(ctx, )
-
 	followRes, err := s.DbQueries.CreateFeedFollow(
 		ctx,
 		database.CreateFeedFollowParams{
@@ -406,4 +415,20 @@ func HandlerFollowing(s *State, cmd Command, user database.User) error {
 
 	return nil
 
+}
+
+func HandlerHelp(s *State, cmd Command, cmds Commands) error {
+	fmt.Println("commands for tool:")
+	for coms, help := range cmds.Helps {
+		fmt.Printf("\t %v: %v\n", coms, help)
+	}
+	return nil
+
+}
+
+func MiddleWareHelp(handler func(s *State, c Command, cmd Commands) error, cmds Commands) func(*State, Command) error {
+
+	return func(s *State, cmd Command) error {
+		return HandlerHelp(s, cmd, cmds)
+	}
 }
