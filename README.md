@@ -27,27 +27,33 @@
 
 ## How To Use
 
-
 To Run this application, you'll need to install 
 [Golang](https://go.dev/doc/install) 
-[Postgresql](https://www.postgresql.org/docs) (sudo apt install postgresql postgresql-contrib)
+[Postgresql](https://www.postgresql.org/docs) 
+[Goose](https://github.com/pressly/goose/)
+
 
 
 Set up the gator database
 ```bash
+sudo apt install postgresql postgresql-contrib
 sudo service postgresql start
 sudo -u postgres psql
 CREATE DATABASE gator;
 ```
 
+database migrations and tool install
+```bash
+$ go install github.com/pressly/goose/v3/cmd/goose@latest
+$ git clone https://github.com/shahanMMiah/blogAggregator.git
+$ cd blogAggregator/sql/schema
+$ goose postgres postgres://postgres:postgres@localhost:5432/gator up
+$ go install
+```
+
 Setting up a config file: Create a json file in home dir name '.gatorconfig.json" with contents:
 ```json
 '{"Db_url":"postgres://postgres:postgres@localhost:5432/gator?sslmode=disable","Current_user_name":"","Posts_limit":10}'
-```
-
-```bash
-# install the tool
-$ go install github.com/shahanmmiah/blogAggregator@latest
 ```
 
 ```bash
