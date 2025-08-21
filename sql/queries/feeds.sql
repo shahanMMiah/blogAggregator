@@ -29,3 +29,6 @@ SELECT * FROM feeds
 INNER JOIN feed_follows ON feed_follows.user_id = $1 and feed_follows.feed_id = url
 ORDER BY last_fetched_at ASC NULLS FIRST
 LIMIT 1;
+
+-- name: RemoveFeeds :exec
+DELETE FROM feeds WHERE name = $1;

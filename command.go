@@ -70,22 +70,6 @@ func (cmds *Commands) Run(s *State, cmd Command) error {
 	return nil
 }
 
-func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) error) func(*State, Command) error {
-
-	return func(s *State, cmd Command) error {
-
-		currentUser, err := s.DbQueries.GetUser(context.Background(), s.Config.Current_user_name)
-
-		if err != nil {
-			return err
-		}
-
-		return handler(s, cmd, currentUser)
-
-	}
-
-}
-
 func ScrapeFeed(s *State, user database.User) error {
 	ctx := context.Background()
 	feed, err := s.DbQueries.GetNextFetchedFeed(ctx, user.ID)
@@ -98,6 +82,7 @@ func ScrapeFeed(s *State, user database.User) error {
 		return err
 	}
 
+	fmt.Printf("Checking %v feed for new posts...\n", feed.Name)
 	feedResp, err := rss.FetchFeed(ctx, feed.Url)
 	if err != nil {
 		return err
@@ -131,6 +116,31 @@ func ScrapeFeed(s *State, user database.User) error {
 
 	return nil
 
+}
+
+//middleware funcs
+
+func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) error) func(*State, Command) error {
+
+	return func(s *State, cmd Command) error {
+
+		currentUser, err := s.DbQueries.GetUser(context.Background(), s.Config.Current_user_name)
+
+		if err != nil {
+			return err
+		}
+
+		return handler(s, cmd, currentUser)
+
+	}
+
+}
+
+func MiddleWareHelp(handler func(s *State, c Command, cmd Commands) error, cmds Commands) func(*State, Command) error {
+
+	return func(s *State, cmd Command) error {
+		return HandlerHelp(s, cmd, cmds)
+	}
 }
 
 // cli handler functions
@@ -261,7 +271,7 @@ func HandlerBrowse(s *State, cmd Command, user database.User) error {
 
 		fmt.Printf("post #%v: from %s: %v\n", num, rss.Name, post.CreatedAt)
 		fmt.Printf("\tTitle : %v\n", termlink.Link(post.Title, post.Url))
-		fmt.Printf("\t\t%v\n", post.Description)
+		fmt.Printf("\t\t%v\n\n", post.Description)
 	}
 
 	return nil
@@ -426,9 +436,17 @@ func HandlerHelp(s *State, cmd Command, cmds Commands) error {
 
 }
 
-func MiddleWareHelp(handler func(s *State, c Command, cmd Commands) error, cmds Commands) func(*State, Command) error {
-
-	return func(s *State, cmd Command) error {
-		return HandlerHelp(s, cmd, cmds)
+func HandlerRemoveFeed(s *State, cmd Command) error {
+	if len(cmd.Args) < 1 {
+		return fmt.Errorf("remove feed expect a feed name arg")
 	}
+
+	err := s.DbQueries.RemoveFeeds(context.Background(), cmd.Args[0])
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Removed %v from rss feeds\n", cmd.Args[0])
+
+	return nil
 }

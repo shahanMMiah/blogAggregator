@@ -41,6 +41,7 @@ func main() {
 	cmds.Register("following", "veiw all followed feeds", MiddlewareLoggedIn(HandlerFollowing))
 	cmds.Register("browse", "browse all collected posts", MiddlewareLoggedIn(HandlerBrowse))
 	cmds.Register("help", "view help message for commands", MiddleWareHelp(HandlerHelp, cmds))
+	cmds.Register("removefeed", "remove a feed from saved feeds", HandlerRemoveFeed)
 
 	cmd, err := CreateCommand()
 	if err != nil {
