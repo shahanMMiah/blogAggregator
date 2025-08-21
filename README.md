@@ -32,24 +32,26 @@ To Run this application, you'll need to install
 [Golang](https://go.dev/doc/install) 
 [Postgresql](https://www.postgresql.org/docs) (sudo apt install postgresql postgresql-contrib)
 
+
+Set up the gator database
+```bash
+sudo service postgresql start
+sudo -u postgres psql
+CREATE DATABASE gator;
+```
+
 Setting up a config file: Create a json file in home dir name '.gatorconfig.json" with contents:
-
 ```json
-'{"Db_url":"","Current_user_name":"","Posts_limit":10}'
+'{"Db_url":"postgres://postgres:postgres@localhost:5432/gator?sslmode=disable","Current_user_name":"","Posts_limit":10}'
 ```
 
 ```bash
 # install the tool
-$ go install github.com/shahanmmiah/blogAggregator
+$ go install github.com/shahanmmiah/blogAggregator@latest
 ```
 
 ```bash
-# install the tool
-$ go install github.com/shahanmmiah/blogAggregator
-```
-
-```bash
-# tool usage exmaps:
+# tool usage exmaples:
 $ blogAggregator help # veiw all commands help
 $ blogAggregator register {username} # register username
 $ blogAggreator addfeed {rss xml URL} # add/follow rss feed 
